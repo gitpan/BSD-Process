@@ -13,7 +13,7 @@ use XSLoader;
 use base qw(Class::Accessor);
 
 use vars qw($VERSION @ISA @EXPORT_OK);
-$VERSION = '0.01';
+$VERSION = '0.02';
 @ISA = qw(Exporter Class::Accessor);
 
 @EXPORT_OK = (qw(process_info process_list));
@@ -47,15 +47,10 @@ BEGIN {
         command_name             => 'comm',
     );
 
-    my %alias_FreeBSD_6 = (
+    my %alias_FreeBSD_5 = (
+        %alias_FreeBSD_4,
         process_args             => 'args',
-        process_pid              => 'pid',
-        parent_pid               => 'ppid',
-        process_group_id         => 'pgid',
-        tty_process_group_id     => 'tpgid',
-        process_session_id       => 'sid',
         terminal_session_id      => 'tsid',
-        job_control_counter      => 'jobc',
         effective_user_id        => 'uid',
         real_user_id             => 'ruid',
         saved_effective_user_id  => 'svuid',
@@ -64,21 +59,10 @@ BEGIN {
         number_of_groups         => 'ngroups',
         group_list               => 'groups',
         virtual_size             => 'size',
-        resident_set_size        => 'rssize',
-        rssize_before_swap       => 'swrss',
-        text_size                => 'tsize',
         data_size                => 'dsize',
         stack_size               => 'ssize',
-        exit_status              => 'xstat',
-        accounting_flags         => 'acflag',
-        percent_cpu              => 'pctcpu',
-        estimated_cpu            => 'estcpu',
-        sleep_time               => 'slptime',
-        time_last_swap           => 'swtime',
-        elapsed_time             => 'runtime',
         start_time               => 'start',
         children_time            => 'childtime',
-        process_flags            => 'flag',
         posix_advisory_lock      => 'advlock',
         has_controlling_terminal => 'controlt',
         is_kernel_thread         => 'kthread',
@@ -86,7 +70,6 @@ BEGIN {
         parent_waiting           => 'ppwait',
         started_profiling        => 'profil',
         stopped_profiling        => 'stopprof',
-        process_had_threads      => 'hadthreads',
         id_privs_set             => 'sugid',
         system_process           => 'system',
         single_exit_not_wait     => 'single_exit',
@@ -106,19 +89,8 @@ BEGIN {
         is_a_zombie              => 'stat_5',
         is_waiting_on_intr       => 'stat_6',
         is_blocked               => 'stat_7',
-        nice_priority            => 'nice',
-        process_lock_count       => 'lock',
-        run_queue_index          => 'rqindex',
-        current_cpu              => 'oncpu',
-        last_cpu                 => 'lastcpu',
         old_command_name         => 'ocomm',
-        wchan_message            => 'wmesg',
-        setlogin_name            => 'login',
         name_of_lock             => 'lockname',
-        command_name             => 'comm',
-        emulation_name           => 'emul',
-        process_jail_id          => 'jid',
-        number_of_threads        => 'numthreads',
         priority_scheduling_class => 'pri_class',
         priority_level            => 'pri_level',
         priority_native           => 'pri_native',
@@ -140,6 +112,15 @@ BEGIN {
         signals_received          => 'nsignals',
         voluntary_context_switch   => 'nvcsw',
         involuntary_context_switch => 'nivcsw',
+    );
+
+    my %alias_FreeBSD_6 = (
+        %alias_FreeBSD_4,
+        %alias_FreeBSD_5,
+        process_had_threads      => 'hadthreads',
+        emulation_name           => 'emul',
+        process_jail_id          => 'jid',
+        number_of_threads        => 'numthreads',
         user_time_ch               => 'utime_ch',
         system_time_ch             => 'stime_ch',
         total_time_ch              => 'time_ch',
@@ -167,6 +148,9 @@ BEGIN {
         if ($osrelease =~ /^4/) {
             $alias = \%alias_FreeBSD_4;
         }
+        elsif ($osrelease =~ /^5/) {
+            $alias = \%alias_FreeBSD_5;
+        }
         else {
             $alias = \%alias_FreeBSD_6;
         }
@@ -177,6 +161,9 @@ BEGIN {
             use Config;
             if ($Config{osvers} =~ /^4/) {
                 $alias = \%alias_FreeBSD_4;
+            }
+            elsif ($Config{osvers} =~ /^5/) {
+                $alias = \%alias_FreeBSD_5;
             }
             else {
                 $alias = \%alias_FreeBSD_6;
@@ -338,8 +325,8 @@ BSD::Process - Retrieve information about running processes
 
 =head1 VERSION
 
-This document describes version 0.01 of BSD::Process,
-released 2006-11-01.
+This document describes version 0.02 of BSD::Process,
+released 2006-11-02.
 
 =head1 SYNOPSIS
 
@@ -360,6 +347,9 @@ about current processes as Perl objects. These may then be
 queried, extracted and reported upon. This allows a more
 natural style of programming (as opposed to scraping the
 output of ps(1)).
+
+The information is retrieved via the C<kvm> subsystem, not
+the F</proc> filesystem.
 
 =head1 FUNCTIONS
 
@@ -522,7 +512,7 @@ becomes:
   my $len = BSD::Process::attr_len;
   my $self = BSD::Process->new;
   for my $attr (BSD::Process::attr) {
-    printf "$*s %s\n", $len, $attr, $self->{$attr};
+    printf "%*s %s\n", $len, $attr, $self->{$attr};
   }
 
 =item attr_alias
@@ -1061,6 +1051,26 @@ added in future versions.
 Read and write kernel variables. With these two modules, there
 should be much less need for writing shell scripts that scrape
 the output of ps(1) and sysctl(8).
+
+=item L<Proc::ProcessTable>
+
+Seems to be a fairly wide cross-platform module. Goes into
+a fair amount of depth, but not as much as C<BSD::Process>
+does in its own particular niche. Also, FreeBSD has moved
+away from the F</proc> filesystem.
+
+Definitely the module to use if you need to go
+multi-platform.
+
+=item L<Solaris::Procfs>
+
+Information about processes on the Solaris platform. The
+documentation indicates that it is not finished, however,
+it does not appear to have been updated since 2003.
+
+=item L<Win32::Process::Info>
+
+Information about current processes on the Win32 platform.
 
 =back
 

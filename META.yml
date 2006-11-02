@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                BSD-Process
-version:             0.01
+version:             0.02
 abstract:            Retrieve information about running processes
 license:             perl
 generated_by:        ExtUtils::MakeMaker version 6.31

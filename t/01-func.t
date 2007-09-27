@@ -1,18 +1,22 @@
 # 01-func.t
 # Test the public BSD::Process routines
 #
-# Copyright (C) 2006 David Landgren
+# Copyright (C) 2006-2007 David Landgren
 
 use strict;
 use Test::More;
 
-use BSD::Process;
-
 use Config;
+
+my $Unchanged = 'The scalar remains the same';
+$_ = $Unchanged;
+
 my $RUNNING_ON_FREEBSD_4 = $Config{osvers} =~ /^4/;
 my $RUNNING_ON_FREEBSD_5 = $Config{osvers} =~ /^5/;
 
-plan tests => 151 + scalar(BSD::Process::attr);
+plan tests => 152 + scalar(BSD::Process::attr());
+
+BEGIN { use_ok('BSD::Process'); }
 
 my $info = BSD::Process::info();
 
@@ -43,9 +47,6 @@ ok( defined( delete $info->{wmesg} ), 'attribute wmesg');
 ok( defined( delete $info->{login} ), 'attribute login');
 ok( defined( delete $info->{comm} ), 'attribute comm');
 
-SKIP: {
-    skip( "not supported on FreeBSD 4.x", 86 )
-        if $RUNNING_ON_FREEBSD_4;
 ok( defined( delete $info->{args} ), 'attribute args');
 ok( defined( delete $info->{tsid} ), 'attribute tsid');
 ok( defined( delete $info->{uid} ), 'attribute uid');
@@ -57,7 +58,6 @@ my $ngroups;
 ok( defined( $ngroups = delete $info->{ngroups} ), 'attribute ngroups');
 ok( defined( delete $info->{size} ), 'attribute size');
 ok( defined( delete $info->{dsize} ), 'attribute dsize');
-# 10
 ok( defined( delete $info->{ssize} ), 'attribute ssize');
 ok( defined( delete $info->{start} ), 'attribute start');
 ok( defined( delete $info->{childtime} ), 'attribute childtime');
@@ -68,7 +68,6 @@ ok( defined( delete $info->{noload} ), 'attribute noload');
 ok( defined( delete $info->{ppwait} ), 'attribute ppwait');
 ok( defined( delete $info->{profil} ), 'attribute profil');
 ok( defined( delete $info->{stopprof} ), 'attribute stopprof');
-# 20
 ok( defined( delete $info->{sugid} ), 'attribute sugid');
 ok( defined( delete $info->{system} ), 'attribute system');
 ok( defined( delete $info->{single_exit} ), 'attribute single_exit');
@@ -79,7 +78,6 @@ ok( defined( delete $info->{exec} ), 'attribute exec');
 ok( defined( delete $info->{kiflag} ), 'attribute kiflag');
 ok( defined( delete $info->{locked} ), 'attribute locked');
 ok( defined( delete $info->{isctty} ), 'attribute isctty');
-# 30
 ok( defined( delete $info->{issleader} ), 'attribute issleader');
 ok( defined( delete $info->{stat} ), 'attribute stat');
 ok( defined( delete $info->{stat_1} ), 'attribute stat_1');
@@ -90,7 +88,6 @@ ok( defined( delete $info->{stat_5} ), 'attribute stat_5');
 ok( defined( delete $info->{stat_6} ), 'attribute stat_6');
 ok( defined( delete $info->{stat_7} ), 'attribute stat_7');
 ok( defined( delete $info->{ocomm} ), 'attribute ocomm');
-# 40
 ok( defined( delete $info->{lockname} ), 'attribute lockname');
 ok( defined( delete $info->{pri_class} ), 'attribute pri_class');
 ok( defined( delete $info->{pri_level} ), 'attribute pri_level');
@@ -101,7 +98,6 @@ ok( defined( delete $info->{stime} ), 'attribute stime');
 ok( defined( delete $info->{time} ), 'attribute time (utime+stime)');
 ok( defined( delete $info->{maxrss} ), 'attribute maxrss');
 ok( defined( delete $info->{ixrss} ), 'attribute ixrss');
-# 50
 ok( defined( delete $info->{idrss} ), 'attribute idrss');
 ok( defined( delete $info->{isrss} ), 'attribute isrss');
 ok( defined( delete $info->{minflt} ), 'attribute minflt');
@@ -112,13 +108,9 @@ ok( defined( delete $info->{oublock} ), 'attribute oublock');
 ok( defined( delete $info->{msgsnd} ), 'attribute msgsnd');
 ok( defined( delete $info->{msgrcv} ), 'attribute msgrcv');
 ok( defined( delete $info->{nsignals} ), 'attribute nsignals');
-# 60
 ok( defined( delete $info->{nvcsw} ), 'attribute nvcsw');
 ok( defined( delete $info->{nivcsw} ), 'attribute nivcsw');
 
-SKIP: {
-    skip( "not supported on FreeBSD 5.x", 21 )
-        if $RUNNING_ON_FREEBSD_5;
 ok( defined( delete $info->{hadthreads} ), 'attribute hadthreads');
 ok( defined( delete $info->{emul} ), 'attribute emul');
 ok( defined( delete $info->{jid} ), 'attribute jid');
@@ -140,7 +132,6 @@ ok( defined( delete $info->{msgrcv_ch} ), 'attribute msgrcv_ch');
 ok( defined( delete $info->{nsignals_ch} ), 'attribute nsignals_ch');
 ok( defined( delete $info->{nvcsw_ch} ), 'attribute nvcsw_ch');
 ok( defined( delete $info->{nivcsw_ch} ), 'attribute nivcsw_ch');
-}
 
 # attribute returning non-scalars
 
@@ -149,7 +140,6 @@ ok( defined($grouplist), 'attribute groups' );
 is( ref($grouplist), 'ARRAY', q{... it's a list} );
 is( scalar(@$grouplist), $ngroups, "... of the expected size" )
     or diag("grouplist = (@$grouplist)");
-} # SKIP
 
 # check for typos in hv_store calls in Process.xs
 is( scalar(keys %$info), 0, 'all attributes have been accounted for' )
@@ -395,7 +385,16 @@ SKIP: {
         if $RUNNING_ON_FREEBSD_4;
     my $root = BSD::Process::all( ruid => 'root' );
     my $uid_root_count = 0;
-    $root->{$_}->uid == 0 and ++$uid_root_count for keys %$root;
+    for (keys %$root) {
+        if ($root->{$_}->uid == 0) {
+            ++$uid_root_count;
+        }
+        elsif ($root->{$_}->ruid == 0) {
+            ++$uid_root_count;
+            $ENV{PERL_AUTHOR_TESTING}
+                and diag("root proc $_ has uid " . $root->{$_}->uid . "/" . $root->{$_}->ruid  );
+        }
+    }
     is( $uid_root_count, scalar(keys %$root), q{counted all ruid root's processes} );
 }
 
@@ -404,7 +403,7 @@ SKIP: {
         if $RUNNING_ON_FREEBSD_4;
     my $root = BSD::Process::all( real_user_id => 'root' );
     my $uid_root_count = 0;
-    $root->{$_}->uid == 0 and ++$uid_root_count for keys %$root;
+    $root->{$_}->ruid == 0 and ++$uid_root_count for keys %$root;
     is( $uid_root_count, scalar(keys %$root), q{counted all real_user_id root's processes} );
 }
 
@@ -421,7 +420,7 @@ SKIP: {
             if ($proc->rgid == $wheel_gid) {
                  ++$gid_wheel_count;
             }
-            else {
+            elsif ($ENV{PERL_AUTHOR_TESTING}) {
                 my $msg = "$proc->{comm}($proc->{pid}) has rgid $proc->{rgid} not $wheel_gid";
                 if ($proc->{comm} eq 'sshd') {
                     # sshd uses process separation, which throws this off
@@ -456,3 +455,5 @@ SKIP: {
         is( $gid_wheel_count, scalar(keys %$wheel), q{counted all effective_group_id wheel's processes} );
     }
 }
+
+is($_, $Unchanged, $Unchanged);

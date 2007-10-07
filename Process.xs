@@ -22,6 +22,12 @@
 #undef cv
 #endif
 
+#if __FreeBSD_version < 500000
+#define PID_FIELD kp_proc.p_pid
+#else
+#define PID_FIELD ki_pid
+#endif
+
 #include <fcntl.h> /* O_RDONLY */
 #include <limits.h> /* _POSIX2_LINE_MAX */
 
@@ -99,7 +105,6 @@ HV *_procinfo (struct kinfo_proc *kp, int resolve) {
     hv_store(h, "swrss",   5, newSViv(kp->kp_eproc.e_xswrss), 0);
     hv_store(h, "flag",    4, newSViv(kp->kp_eproc.e_flag), 0);
     hv_store(h, "login",   5, newSVpv(kp->kp_eproc.e_login, 0), 0);
-    hv_store(h, "sid",     3, newSViv(kp->kp_eproc.e_sid), 0);
     hv_store(h, "estcpu",  6, newSViv(kp->kp_proc.p_estcpu), 0);
     hv_store(h, "pctcpu",  6, newSViv(kp->kp_proc.p_pctcpu), 0);
     hv_store(h, "slptime", 7, newSViv(kp->kp_proc.p_slptime), 0);
@@ -117,6 +122,7 @@ HV *_procinfo (struct kinfo_proc *kp, int resolve) {
     /* not available in FreeBSD 4.x */
     hv_store(h, "tpgid",  5, newSViv(-1), 0);
     hv_store(h, "sid",    3, newSViv(-1), 0);
+    hv_store(h, "tsid",   4, newSViv(-1), 0);
     hv_store(h, "jobc",   4, newSViv(-1), 0);
     hv_store(h, "uid",    3, newSViv(-1), 0);
     hv_store(h, "ruid",   4, newSViv(-1), 0);
@@ -163,6 +169,7 @@ HV *_procinfo (struct kinfo_proc *kp, int resolve) {
     hv_store(h, "stat_6",      6, newSViv(-1), 0);
     hv_store(h, "stat_7",      6, newSViv(-1), 0);
     hv_store(h, "ocomm",       5, newSViv(-1), 0);
+    hv_store(h, "lockname",    8, newSViv(-1), 0);
 
     hv_store(h, "pri_class",   9, newSViv(-1), 0);
     hv_store(h, "pri_level",   9, newSViv(-1), 0);
@@ -405,7 +412,6 @@ HV *_procinfo (struct kinfo_proc *kp, int resolve) {
     hv_store(h, "utime_ch",     8, newSViv(-1), 0);
     hv_store(h, "stime_ch",     8, newSViv(-1), 0);
     hv_store(h, "time_ch",      7, newSViv(-1), 0);
-        TIME_FRAC(rp->ru_utime)+TIME_FRAC(rp->ru_stime)), 0);
     hv_store(h, "maxrss_ch",    9, newSViv(-1), 0);
     hv_store(h, "ixrss_ch",     8, newSViv(-1), 0);
     hv_store(h, "idrss_ch",     8, newSViv(-1), 0);
@@ -499,6 +505,11 @@ _info(int pid, int resolve)
 void
 _list(int request, int param)
     PREINIT:
+#ifdef dXSTARG
+    dXSTARG;
+#else
+    dTARGET;
+#endif
         struct kinfo_proc *kip;
         kvm_t *kd;
         int nr;
@@ -511,10 +522,11 @@ _list(int request, int param)
         if (kip) {
             int p;
             for (p = 0; p < nr; ++kip, ++p) {
-#if __FreeBSD_version < 500000
-                mPUSHi(kip->kp_proc.p_pid);
+#if PERL_API_VERSION == 5 && PERL_VERSION == 6
+                EXTEND(SP,1);
+                XPUSHi(kip->PID_FIELD);
 #else
-                mPUSHi(kip->ki_pid);
+                mPUSHi(kip->PID_FIELD);
 #endif
             }
             kvm_close(kd);

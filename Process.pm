@@ -1,6 +1,6 @@
 # BSD::Process.pm
 #
-# Copyright (c) 2006 David Landgren
+# Copyright (c) 2006-2007 David Landgren
 # All rights reserved
 
 package BSD::Process;
@@ -13,7 +13,7 @@ use XSLoader;
 use base qw(Class::Accessor);
 
 use vars qw($VERSION @ISA @EXPORT_OK);
-$VERSION = '0.03';
+$VERSION = '0.04';
 @ISA = qw(Exporter Class::Accessor);
 
 @EXPORT_OK = (qw(process_info process_list));
@@ -285,8 +285,8 @@ BSD::Process - Information about running processes on BSD platforms
 
 =head1 VERSION
 
-This document describes version 0.03 of BSD::Process,
-released 2007-09-27.
+This document describes version 0.04 of BSD::Process,
+released 2007-10-07.
 
 =head1 SYNOPSIS
 
@@ -1005,6 +1005,11 @@ occurs, I'd like to know how you managed it.
 B<kvm error in all()/list()>: another "can't happen" error when
 asking the system to return the information about a process.
 
+B<kvm error in list(): proc size mismatch (nnn total, nnn chunks)>:
+you have upgraded a system across major versions, for instance 4.x
+to 5.x, but the published system header files belong to the previous
+version.
+
 =head1 NOTES
 
 Currently, only FreeBSD versions 4 through 6 are supported. Support
@@ -1065,7 +1070,7 @@ None.
 
 =head1 AUTHOR
 
-David Landgren, copyright (C) 2006. All rights reserved.
+David Landgren, copyright (C) 2006-2007. All rights reserved.
 
 http://www.landgren.net/perl/
 

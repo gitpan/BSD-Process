@@ -1,7 +1,7 @@
 # 02-method.t
 # Method tests for BSD::Process
 #
-# Copyright (C) 2006 David Landgren
+# Copyright (C) 2006-2007 David Landgren
 
 use strict;
 use Test::More;
@@ -118,8 +118,12 @@ plan tests => 242
     delete $pe->{groups};
     ok( defined($grouplist), 'method groups' );
     is( ref($grouplist), 'ARRAY', q{... it's a list} );
-    is( scalar(@$grouplist), $ngroups, "... of the expected size" )
-        or diag("grouplist = (@$grouplist)");
+    SKIP: {
+        skip( "not supported on FreeBSD 4.x", 1 )
+            if $RUNNING_ON_FREEBSD_4;
+        is( scalar(@$grouplist), $ngroups, "... of the expected size" )
+            or diag("grouplist = (@$grouplist)");
+    }
 
     is($pe->hadthreads,  delete $pe->{hadthreads},  'method hadthreads');
     is($pe->emul,        delete $pe->{emul},        'method emul');
@@ -259,16 +263,20 @@ plan tests => 242
     is($pe->voluntary_context_switch_ch,   delete $pe->{nvcsw_ch},    'alias voluntary_context_switch');
     is($pe->involuntary_context_switch_ch, delete $pe->{nivcsw_ch},   'alias involuntary_context_switch');
 
+    $grouplist = $pe->group_list;
+    delete $pe->{groups};
     SKIP: {
         skip( "not supported on FreeBSD 4.x", 3 )
             if $RUNNING_ON_FREEBSD_4;
-    my $grouplist = $pe->group_list;
-    delete $pe->{groups};
-    ok( defined($grouplist), 'alias group_list' );
-    is( ref($grouplist), 'ARRAY', q{... it's also a list} );
-    is( scalar(@$grouplist), $ngroups, "... also of the expected size" )
-        or diag("grouplist = (@$grouplist)");
-    } # SKIP
+        ok( defined($grouplist), 'alias group_list' );
+        is( ref($grouplist), 'ARRAY', q{... it's also a list} );
+        SKIP: {
+            skip( "didn't get an ARRAY in previous test", 1 )
+                unless ref($grouplist);
+            is( scalar(@$grouplist), $ngroups, "... also of the expected size" )
+                or diag("grouplist = (@$grouplist)");
+        }
+    }
 
     # check for typos in hv_store calls in Process.xs
     is( scalar(grep {!/^_/} keys %$pe), 0, 'all aliases have been accounted for' )
@@ -278,7 +286,7 @@ plan tests => 242
     cmp_ok( $pi->refresh->runtime, '>', $time, 'refresh updates counters' );
 
     $pe->refresh;
-    for my $method (BSD::Process::attr_alias) {
+    for my $method (sort {$a cmp $b} BSD::Process::attr_alias) {
         ok($pe->can($method), "can $method");
     }
 }
@@ -289,35 +297,36 @@ plan tests => 242
     my $sym_imp = BSD::Process->new(     {resolve => 1} );
     my $sym_exp = BSD::Process->new( $$, {resolve => 1} );
 
-    SKIP: {
-        skip( "not supported on FreeBSD 4.x", 13 )
-            if $RUNNING_ON_FREEBSD_4;
-    is( $num->uid,   scalar(getpwnam($sym_imp->uid)),   'implicit pid resolve muid' );
-    is( $num->ruid,  scalar(getpwnam($sym_imp->ruid)),  'implicit pid resolve ruid' );
-    is( $num->svuid, scalar(getpwnam($sym_imp->svuid)), 'implicit pid resolve svuid' );
-    is( $num->rgid,  scalar(getgrnam($sym_imp->rgid)),  'implicit pid resolve rgid' );
-    is( $num->svgid, scalar(getgrnam($sym_imp->svgid)), 'implicit pid resolve svgid' );
-
-    is( $num->uid,   scalar(getpwnam($sym_exp->uid)),   'explicit pid resolve uid' );
-    is( $num->ruid,  scalar(getpwnam($sym_exp->ruid)),  'explicit pid resolve ruid' );
-    is( $num->svuid, scalar(getpwnam($sym_exp->svuid)), 'explicit pid resolve svuid' );
-    is( $num->rgid,  scalar(getgrnam($sym_exp->rgid)),  'explicit pid resolve rgid' );
-    is( $num->svgid, scalar(getgrnam($sym_exp->svgid)), 'explicit pid resolve svgid' );
-
     my $num_grouplist = $num->groups;
     my $sym_grouplist = $sym_imp->group_list;
 
-    is( ref($num_grouplist), 'ARRAY', 'numeric grouplist is an ARRAY' );
-    is( ref($sym_grouplist), 'ARRAY', 'symbolic grouplist is an ARRAY' );
+    SKIP: {
+        skip( "not supported on FreeBSD 4.x", 13 )
+            if $RUNNING_ON_FREEBSD_4;
+        is( $num->uid,   scalar(getpwnam($sym_imp->uid)),   'implicit pid resolve muid' );
+        is( $num->ruid,  scalar(getpwnam($sym_imp->ruid)),  'implicit pid resolve ruid' );
+        is( $num->svuid, scalar(getpwnam($sym_imp->svuid)), 'implicit pid resolve svuid' );
+        is( $num->rgid,  scalar(getgrnam($sym_imp->rgid)),  'implicit pid resolve rgid' );
+        is( $num->svgid, scalar(getgrnam($sym_imp->svgid)), 'implicit pid resolve svgid' );
 
-    is( scalar(@$num_grouplist), scalar(@$sym_grouplist), 'groups counts' );
+        is( $num->uid,   scalar(getpwnam($sym_exp->uid)),   'explicit pid resolve uid' );
+        is( $num->ruid,  scalar(getpwnam($sym_exp->ruid)),  'explicit pid resolve ruid' );
+        is( $num->svuid, scalar(getpwnam($sym_exp->svuid)), 'explicit pid resolve svuid' );
+        is( $num->rgid,  scalar(getgrnam($sym_exp->rgid)),  'explicit pid resolve rgid' );
+        is( $num->svgid, scalar(getgrnam($sym_exp->svgid)), 'explicit pid resolve svgid' );
+
+        is( ref($num_grouplist), 'ARRAY', 'numeric grouplist is an ARRAY' );
+        is( ref($sym_grouplist), 'ARRAY', 'symbolic grouplist is an ARRAY' );
+
+        is( scalar(@$num_grouplist), scalar(@$sym_grouplist), 'groups counts' );
+    }
+
     for my $gid (0..BSD::Process::max_kernel_groups) {
         if ($gid < @$num_grouplist) {
             is( $num_grouplist->[$gid],  scalar(getgrnam($sym_grouplist->[$gid])), "resolve group $gid" );
         }
         else {
-            pass( "resolve group $gid (undefined)" );
+            pass( "resolve group $gid (none on this platform)" );
         }
     }
-    } # SKIP
 }

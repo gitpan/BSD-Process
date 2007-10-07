@@ -54,8 +54,6 @@ ok( defined( delete $info->{ruid} ), 'attribute ruid');
 ok( defined( delete $info->{svuid} ), 'attribute svuid');
 ok( defined( delete $info->{rgid} ), 'attribute rgid');
 ok( defined( delete $info->{svgid} ), 'attribute svgid');
-my $ngroups;
-ok( defined( $ngroups = delete $info->{ngroups} ), 'attribute ngroups');
 ok( defined( delete $info->{size} ), 'attribute size');
 ok( defined( delete $info->{dsize} ), 'attribute dsize');
 ok( defined( delete $info->{ssize} ), 'attribute ssize');
@@ -133,13 +131,21 @@ ok( defined( delete $info->{nsignals_ch} ), 'attribute nsignals_ch');
 ok( defined( delete $info->{nvcsw_ch} ), 'attribute nvcsw_ch');
 ok( defined( delete $info->{nivcsw_ch} ), 'attribute nivcsw_ch');
 
+my $ngroups;
+ok( defined( $ngroups = delete $info->{ngroups} ), 'attribute ngroups');
+
 # attribute returning non-scalars
 
 my $grouplist = delete $info->{groups};
 ok( defined($grouplist), 'attribute groups' );
 is( ref($grouplist), 'ARRAY', q{... it's a list} );
-is( scalar(@$grouplist), $ngroups, "... of the expected size" )
-    or diag("grouplist = (@$grouplist)");
+if ($RUNNING_ON_FREEBSD_4) {
+    pass("... of the expected size (unknowable on FreeBSD 4.x)");
+}
+else {
+    is( scalar(@$grouplist), $ngroups, "... of the expected size" )
+        or diag("grouplist = (@$grouplist)");
+}
 
 # check for typos in hv_store calls in Process.xs
 is( scalar(keys %$info), 0, 'all attributes have been accounted for' )
@@ -182,7 +188,12 @@ SKIP: {
     for my $pid (@all) {
         my $proc = BSD::Process->new($pid);
         if ($proc) {
-            $uid{$proc->{uid}}++;
+            if (exists $proc->{_pid} and not exists $proc->{pid}) {
+                diag( "proc $proc->{_pid} is a zombie" )
+            }
+            else {
+                $uid{$proc->{uid}}++;
+            }
         }
         else {
             diag( "new() failed for pid $pid" );
@@ -252,9 +263,9 @@ SKIP: {
     is ($total, $blessed, "... and all blessed BSD::Process objects" );
 }
 
-# processes owned by an effective gid
 SKIP: {
-    skip( "not supported on FreeBSD 4.x or 5.x", 3 )
+    # processes owned by an effective gid
+    skip( "not supported on FreeBSD 4.x or 5.x", 6 )
         if $RUNNING_ON_FREEBSD_4 or $RUNNING_ON_FREEBSD_5;
     # count the processes owned by each effective gid
     # kinfo_proc lacks a gid field, so we'll punt with a real gid
@@ -274,13 +285,8 @@ SKIP: {
     @proc = BSD::Process::list( effective_group_id => $bigger );
     cmp_ok( scalar(@proc), '<',  $all_procs, "gid $bigger smaller than count of all processes" );
     cmp_ok( scalar(@proc), '<=', $biggest_gid, "gid $bigger smaller or equal to gid $biggest" );
-}
 
-# processes owned by a rgid
-SKIP: {
-    skip( "not supported on FreeBSD 4.x or 5.x", 3 )
-        if $RUNNING_ON_FREEBSD_4 or $RUNNING_ON_FREEBSD_5;
-    # count the processes owned by each real gid
+    # processes owned by a rgid
     my %rgid;
     for my $pid (@all) {
         my $proc = BSD::Process->new($pid);
@@ -288,9 +294,9 @@ SKIP: {
     }
 
     # now find the gids that own the most processes
-    my ($biggest, $bigger) = (sort {$rgid{$b} <=> $rgid{$a} || $a <=> $b} keys %rgid )[0,1];
+    ($biggest, $bigger) = (sort {$rgid{$b} <=> $rgid{$a} || $a <=> $b} keys %rgid )[0,1];
 
-    my @proc = BSD::Process::list( rgid => $biggest );
+    @proc = BSD::Process::list( rgid => $biggest );
     cmp_ok( scalar(@proc), '<', $all_procs, "rgid $biggest smaller than count of all processes" );
 
     my $biggest_rgid = @proc;
@@ -301,7 +307,7 @@ SKIP: {
 
 # process groups
 SKIP: {
-    skip( "not supported on FreeBSD 4.x", 3 )
+    skip( "not supported on FreeBSD 4.x", 6 )
         if $RUNNING_ON_FREEBSD_4;
     # count the processes in each process group
     my %pgid;
@@ -320,10 +326,8 @@ SKIP: {
     @proc = BSD::Process::list( process_group_id => $bigger );
     cmp_ok( scalar(@proc), '<',  $all_procs, "pgid $bigger smaller than count of all processes" );
     cmp_ok( scalar(@proc), '<=', $biggest_pgid, "pgid $bigger smaller or equal to pgid $biggest" );
-}
 
-# process sessions
-{
+    # process sessions
     # count the processes in each process session
     my %sid;
     for my $pid (@all) {
@@ -332,9 +336,9 @@ SKIP: {
     }
 
     # now find the process groups with the most members
-    my ($biggest, $bigger) = (sort {$sid{$b} <=> $sid{$a} || $a <=> $b} keys %sid )[0,1];
+    ($biggest, $bigger) = (sort {$sid{$b} <=> $sid{$a} || $a <=> $b} keys %sid )[0,1];
 
-    my @proc = BSD::Process::list( sid => $biggest );
+    @proc = BSD::Process::list( sid => $biggest );
     cmp_ok( scalar(@proc), '<', $all_procs, "sid $biggest smaller than count of all processes" );
 
     my $biggest_sid = @proc;
@@ -353,38 +357,27 @@ isnt( $info->{pid}, $parent->{ppid}, 'I am not my grandparent' );
 isnt( $parent->{pid}, $parent->{ppid}, 'and my parent is not my grandparent' );
 
 SKIP: {
-    skip( "not supported on FreeBSD 4.x", 2 )
+    skip( "not supported on FreeBSD 4.x", 6 )
         if $RUNNING_ON_FREEBSD_4;
-my $resolved = BSD::Process::info({resolve => 1});
-is( $resolved->{uid}, scalar(getpwuid($info->{uid})), 'resolve implicit pid' );
 
-$resolved = BSD::Process::info($info->{pid}, {resolve => 1});
-is( $resolved->{uid}, scalar(getpwuid($info->{uid})), 'resolve explicit pid' );
-}
+    my $resolved = BSD::Process::info({resolve => 1});
+    is( $resolved->{uid}, scalar(getpwuid($info->{uid})), 'resolve implicit pid' );
 
-SKIP: {
-    skip( "not supported on FreeBSD 4.x", 1 )
-        if $RUNNING_ON_FREEBSD_4;
+    $resolved = BSD::Process::info($info->{pid}, {resolve => 1});
+    is( $resolved->{uid}, scalar(getpwuid($info->{uid})), 'resolve explicit pid' );
+
     my $root = BSD::Process::all( uid => 'root' );
     my $uid_root_count = 0;
     $root->{$_}->uid == 0 and ++$uid_root_count for keys %$root;
     is( $uid_root_count, scalar(keys %$root), q{counted all uid root's processes} );
-}
 
-SKIP: {
-    skip( "not supported on FreeBSD 4.x", 1 )
-        if $RUNNING_ON_FREEBSD_4;
-    my $root = BSD::Process::all( effective_user_id => 'root' );
-    my $uid_root_count = 0;
+    $root = BSD::Process::all( effective_user_id => 'root' );
+    $uid_root_count = 0;
     $root->{$_}->uid == 0 and ++$uid_root_count for keys %$root;
     is( $uid_root_count, scalar(keys %$root), q{counted all effective uid root's processes} );
-}
 
-SKIP: {
-    skip( "not supported on FreeBSD 4.x", 1 )
-        if $RUNNING_ON_FREEBSD_4;
-    my $root = BSD::Process::all( ruid => 'root' );
-    my $uid_root_count = 0;
+    $root = BSD::Process::all( ruid => 'root' );
+    $uid_root_count = 0;
     for (keys %$root) {
         if ($root->{$_}->uid == 0) {
             ++$uid_root_count;
@@ -396,13 +389,9 @@ SKIP: {
         }
     }
     is( $uid_root_count, scalar(keys %$root), q{counted all ruid root's processes} );
-}
 
-SKIP: {
-    skip( "not supported on FreeBSD 4.x", 1 )
-        if $RUNNING_ON_FREEBSD_4;
-    my $root = BSD::Process::all( real_user_id => 'root' );
-    my $uid_root_count = 0;
+    $root = BSD::Process::all( real_user_id => 'root' );
+    $uid_root_count = 0;
     $root->{$_}->ruid == 0 and ++$uid_root_count for keys %$root;
     is( $uid_root_count, scalar(keys %$root), q{counted all real_user_id root's processes} );
 }
@@ -420,14 +409,14 @@ SKIP: {
             if ($proc->rgid == $wheel_gid) {
                  ++$gid_wheel_count;
             }
-            elsif ($ENV{PERL_AUTHOR_TESTING}) {
+            else {
                 my $msg = "$proc->{comm}($proc->{pid}) has rgid $proc->{rgid} not $wheel_gid";
                 if ($proc->{comm} eq 'sshd') {
                     # sshd uses process separation, which throws this off
                     ++$gid_wheel_count;
                     $msg .= " (pass)";
                 }
-                diag( $msg );
+                $ENV{PERL_AUTHOR_TESTING} and diag( $msg );
             }
         }
         is( $gid_wheel_count, scalar(keys %$wheel), q{counted all gid wheel's processes} );
@@ -448,7 +437,7 @@ SKIP: {
                     ++$gid_wheel_count;
                     $msg .= " (pass)";
                 }
-                diag( $msg );
+                $ENV{PERL_AUTHOR_TESTING} and diag( $msg );
             }
         }
 

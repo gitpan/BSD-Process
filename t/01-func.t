@@ -188,12 +188,9 @@ SKIP: {
     for my $pid (@all) {
         my $proc = BSD::Process->new($pid);
         if ($proc) {
-            if (exists $proc->{_pid} and not exists $proc->{pid}) {
-                diag( "proc $proc->{_pid} is a zombie" )
-            }
-            else {
-                $uid{$proc->{uid}}++;
-            }
+            diag( "proc $proc->{_pid} is a zombie" )
+                if exists $proc->{_pid} and not exists $proc->{pid};
+            $uid{$proc->{uid}}++;
         }
         else {
             diag( "new() failed for pid $pid" );

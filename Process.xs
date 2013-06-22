@@ -1,3 +1,5 @@
+/* Process.xs -- part of the Perl BSD::Process distribution */
+
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
@@ -245,22 +247,25 @@ HV *_procinfo (struct kinfo_proc *kp, int resolve) {
     }
 
     if( argv && *argv ) {
-#ifdef NEVER
         len = strlen(*argv);
+
         argsv = newSVpvn(*argv, len);
         while (*++argv) {
             sv_catpvn(argsv, " ", 1);
             sv_catpvn(argsv, *argv, strlen(*argv));
-            len += strlen(*argv)+1;
         }
-        hv_store(h, "args", 4, argsv, 0);
-#else
-        hv_store(h, "args", 4, newSVpvn("", 0), 0);
-#endif
     }
     else {
-        hv_store(h, "args", 4, newSVpvn("", 0), 0);
+        /* sometimes the process args may be unavailable; when this happens the name
+         * of the executable in brackets is returned, similar to the ps program.
+         */
+        argsv = newSVpvn("[", 1);
+        sv_catpvn(argsv, kp->COMM_FIELD, strlen(kp->COMM_FIELD));
+        sv_catpvn(argsv, "]", 1);
     }
+
+    hv_store(h, "args", 4, argsv, 0);
+
     if (kd) {
         kvm_close(kd);
     }
@@ -287,7 +292,9 @@ HV *_procinfo (struct kinfo_proc *kp, int resolve) {
     hv_store(h, "advlock",      7, newSViv(NO_FREEBSD_4x(P_FLAG(P_ADVLOCK))), 0);
     hv_store(h, "controlt",     8, newSViv(NO_FREEBSD_4x(P_FLAG(P_CONTROLT))), 0);
     hv_store(h, "kthread",      7, newSViv(NO_FREEBSD_4x(P_FLAG(P_KTHREAD))), 0);
+#if __FreeBSD_version < 802501
     hv_store(h, "noload",       6, newSViv(NO_FREEBSD_4x(P_FLAG(P_NOLOAD))), 0);
+#endif
     hv_store(h, "ppwait",       6, newSViv(NO_FREEBSD_4x(P_FLAG(P_PPWAIT))), 0);
     hv_store(h, "profil",       6, newSViv(NO_FREEBSD_4x(P_FLAG(P_PROFIL))), 0);
     hv_store(h, "stopprof",     8, newSViv(NO_FREEBSD_4x(P_FLAG(P_STOPPROF))), 0);

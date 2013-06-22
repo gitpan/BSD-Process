@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               BSD-Process
-version:            0.06
+version:            0.07
 abstract:           Information about running processes on BSD platforms
 author:
     - David Landgren
@@ -12,6 +12,7 @@ build_requires:
     ExtUtils::MakeMaker:  0
 requires:
     Class::Accessor:  0.25
+    perl:             5.008001
     XSLoader:         0
 no_index:
     directory:
